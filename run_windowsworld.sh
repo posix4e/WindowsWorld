@@ -5,11 +5,17 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 [ -f /home/tdx2/.windowsworld.env ] && set -a && . /home/tdx2/.windowsworld.env && set +a
-: "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY not set — put it in /home/tdx2/.windowsworld.env}"
 MODE="${1:-smoke}"
-# claude-* (no '/') routes to the direct Anthropic path (api.anthropic.com, x-api-key).
-# A model id containing '/' (e.g. anthropic/claude-opus-4.8) routes via OPENAI_API_BASE (TrustedRouter).
-MODEL="${MODEL:-claude-opus-4-8}"
+# Model routing (mm_agents/agent.py):
+#   id WITH '/'  (e.g. anthropic/claude-opus-4.8) -> OpenAI-compatible router at OPENAI_API_BASE (OpenRouter)
+#   id like claude-* (no '/')                     -> direct Anthropic (api.anthropic.com, x-api-key)
+MODEL="${MODEL:-anthropic/claude-opus-4.8}"
+if [[ "$MODEL" == */* ]]; then
+  : "${OPENAI_API_KEY:?OPENAI_API_KEY not set — put it in /home/tdx2/.windowsworld.env}"
+  : "${OPENAI_API_BASE:?OPENAI_API_BASE not set — put it in /home/tdx2/.windowsworld.env}"
+else
+  : "${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY not set — put it in /home/tdx2/.windowsworld.env}"
+fi
 BENCH="benchmark_smoke.json"
 [ "$MODE" = "full" ] && BENCH="benchmark.json"
 VMX=/home/tdx2/vms/WindowsWorld/Windows0/Windows0.vmx
