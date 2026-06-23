@@ -12,7 +12,7 @@ Run detached:
   cd /home/tdx2/src/WindowsWorld
   nohup .venv/bin/python watchdog.py > /tmp/ww_watchdog.log 2>&1 &
 """
-import os, re, glob, time, subprocess
+import os, re, glob, time, shutil, subprocess
 
 ROOT = "/home/tdx2/src/WindowsWorld"
 LOG = "/tmp/windowsworld_full.log"
@@ -75,6 +75,12 @@ def kill_run():
 
 
 def start_run():
+    # Re-run any interrupted task (dir without result.json); otherwise the
+    # harness skips it because the dir exists. Stubbed/complete dirs are kept.
+    for d in glob.glob("hf_result/win_*/"):
+        if not glob.glob(os.path.join(d, "*", "result.json")):
+            shutil.rmtree(d, ignore_errors=True)
+            log(f"cleaned incomplete {os.path.basename(d.rstrip('/'))}")
     subprocess.Popen(f"nohup ./run_windowsworld.sh full >> {LOG} 2>&1 &",
                      shell=True)
     time.sleep(8)

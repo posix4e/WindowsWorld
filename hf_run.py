@@ -589,7 +589,10 @@ def main(benchmark_path: str, vmx_path: str, model_name: str, action_space: str,
         screen_size           = (1920, 1080),
         headless              = True,   # headless host (no X display): vmrun must use `nogui`
         os_type               = "Windows",
-        require_a11y_tree     = True)
+        # Only fetch the accessibility tree when the observation type uses it.
+        # The Windows a11y fetch (pywinauto) costs 30-70s PER STEP; with `-o screenshot`
+        # it was fetched and thrown away, making each step ~60-80s instead of ~10-20s.
+        require_a11y_tree     = observation_type in ("a11y", "screenshot_a11y", "som"))
 
     # Prepare agent configuration
     agent_args = {
