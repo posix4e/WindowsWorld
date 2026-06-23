@@ -631,7 +631,11 @@ class PromptAgent:
                 "Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}"
             }
             logger.info("Generating content via OpenAI-compatible router: %s", self.model)
-            response = requests.post(api_url, headers=headers, json=payload)
+            # Drop sampling params: some routers (e.g. TrustedRouter) misroute requests
+            # carrying top_p and return 401 "invalid x-api-key"; opus-4.x also deprecates
+            # temperature upstream. Defaults are fine for the benchmark.
+            router_payload = {k: v for k, v in payload.items() if k not in ("temperature", "top_p")}
+            response = requests.post(api_url, headers=headers, json=router_payload)
             if response.status_code != 200:
                 logger.error("Failed to call LLM: " + response.text)
                 time.sleep(5)
