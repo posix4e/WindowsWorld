@@ -38,9 +38,18 @@ class VMwareProvider(Provider):
             encoding="utf-8"
         )
 
+        # Always wait for completion (and drain pipes). Without this, fire-and-forget
+        # commands like `vmrun start` / `revertToSnapshot` return immediately, so the
+        # start loop spawns overlapping vmrun processes that lock-conflict and the VM
+        # never powers on.
+        stdout, stderr = process.communicate()
+        stdout = (stdout or "").strip()
+        stderr = (stderr or "").strip()
+        if process.returncode != 0:
+            logger.warning("vmrun command failed (rc=%s): %s | stderr=%s | stdout=%s",
+                           process.returncode, command, stderr, stdout)
         if return_output:
-            output = process.communicate()[0].strip()
-            return output
+            return stdout
         else:
             return None
 
@@ -63,7 +72,18 @@ class VMwareProvider(Provider):
                     _command = ["vmrun"] + get_vmrun_type(return_list=True) + ["start", path_to_vm]
                     if headless:
                         _command.append("nogui")
-                    VMwareProvider._execute_command(_command)
+                    # Launch detached: own session + DEVNULL stdio so the spawned
+                    # vmware-vmx daemon does NOT inherit our pipes/process group.
+                    # Otherwise it takes SIGPIPE when those pipes close and does a
+                    # "VMX idle exit", leaving this loop spinning forever (start
+                    # returns rc=0 but the VM never stays up).
+                    subprocess.run(
+                        _command,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        stdin=subprocess.DEVNULL,
+                        start_new_session=True,
+                    )
                     time.sleep(WAIT_TIME)
 
             except subprocess.CalledProcessError as e:

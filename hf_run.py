@@ -503,20 +503,30 @@ def evaluate(task: dict | None = None,
                 "image_url": { "url": f"data:image/png;base64,{base64.b64encode(ss).decode('utf-8')}" } })
 
     from openai import OpenAI
-    client = OpenAI(base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-                    api_key=os.environ.get("QWEN_API_KEY"))
+    # Judge model. Defaults to Claude via Anthropic's OpenAI-compatible endpoint
+    # (reliably handles the large multi-image payloads the judge sends). To use the
+    # paper's qwen3-vl-plus instead, set JUDGE_API_BASE to the DashScope compatible
+    # URL, JUDGE_API_KEY to a QWEN key, and JUDGE_MODEL=qwen3-vl-plus.
+    client = OpenAI(
+        base_url=os.environ.get("JUDGE_API_BASE", "https://api.anthropic.com/v1/"),
+        api_key=os.environ.get("JUDGE_API_KEY") or os.environ.get("ANTHROPIC_API_KEY"))
 
-    # noinspection PyTypeChecker
-    response = client.chat.completions.create(
-        model="qwen3-vl-plus",
+    judge_model = os.environ.get("JUDGE_MODEL", "claude-opus-4-8")
+    create_kwargs = dict(
+        model=judge_model,
         messages=[
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content}
         ],
         max_tokens=4096,
-        top_p=0.9,
-        temperature=0.3
     )
+    # claude-opus-4-8 rejects temperature/top_p; only send them for other judges.
+    if not judge_model.startswith("claude-opus-4-8"):
+        create_kwargs["top_p"] = 0.9
+        create_kwargs["temperature"] = 0.3
+
+    # noinspection PyTypeChecker
+    response = client.chat.completions.create(**create_kwargs)
 
     return response.choices[0].message.content
 
@@ -534,10 +544,10 @@ def main(benchmark_path: str, vmx_path: str, model_name: str, action_space: str,
         agent_type: Type of agent to use ('prompt', 's3', 'coact', 'uipath')
         **agent_kwargs: Additional arguments for specific agent types
     """
-    os.makedirs(".\\hf_result", exist_ok = True)
+    os.makedirs("hf_result", exist_ok = True)
 
     complete_dir = []
-    for result_dir in os.listdir(".\\hf_result"):
+    for result_dir in os.listdir("hf_result"):
         complete_dir.append(result_dir)
 
     all_tasks: list[dict] = []
@@ -557,7 +567,7 @@ def main(benchmark_path: str, vmx_path: str, model_name: str, action_space: str,
         path_to_vm            = vmx_path,
         action_space          = action_space,
         screen_size           = (1920, 1080),
-        headless              = False,
+        headless              = True,   # headless host (no X display): vmrun must use `nogui`
         os_type               = "Windows",
         require_a11y_tree     = True)
 
@@ -628,7 +638,7 @@ def main(benchmark_path: str, vmx_path: str, model_name: str, action_space: str,
     agent = create_agent(agent_type, agent_args, env=env)
 
     for task in all_tasks:
-        task_dir = os.path.join(".\\hf_result", f"{task['task_id']}", datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
+        task_dir = os.path.join("hf_result", f"{task['task_id']}", datetime.datetime.now().strftime("%Y%m%d-%H%M%S"))
         os.makedirs(task_dir, exist_ok = True)
         
         # Use TaskLogger to capture all output to task-specific log file
@@ -748,10 +758,8 @@ def get_parser():
                           help = "API key for the grounder service (optional for localhost)")
     uipath_model_group.add_argument("--grounder-model",   type = str, default = "",
                           help = "Model name for the grounder service (e.g., UI-TARS-1.5-7B)")
-    uipath_model_group.add_argument("--grounding-width",  type = int, default = 1920,
-                          help = "Screen width for grounding coordinate resolution")
-    uipath_model_group.add_argument("--grounding-height", type = int, default = 1080,
-                          help = "Screen height for grounding coordinate resolution")
+    # NOTE: --grounding-width/--grounding-height are already defined on s3_group above
+    # (same dest + defaults); re-declaring here raises argparse conflicting-option errors.
 
     return parser
 

@@ -618,6 +618,26 @@ class PromptAgent:
             else:
                 return response.json()['choices'][0]['message']['content']
 
+        # Router models (OpenAI-compatible gateway, e.g. TrustedRouter): id is namespaced
+        # like "anthropic/claude-opus-4.8" -> always contains "/", native ids never do.
+        # Underlying model emits real pixel coords per the prompt (top-left (0,0), bottom-right
+        # (1920,1080)), so return content as-is — do NOT apply the gpt/gemini 0-1000 rescale.
+        elif "/" in self.model:
+            base_url = os.environ.get('OPENAI_API_BASE', 'https://api.openai.com/v1')
+            api_url = f"{base_url}/chat/completions" if base_url.rstrip('/').endswith('/v1') \
+                else f"{base_url}/v1/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}"
+            }
+            logger.info("Generating content via OpenAI-compatible router: %s", self.model)
+            response = requests.post(api_url, headers=headers, json=payload)
+            if response.status_code != 200:
+                logger.error("Failed to call LLM: " + response.text)
+                time.sleep(5)
+                return ""
+            return response.json()['choices'][0]['message']['content']
+
         # MODIFIED BY HALFCOOLER
         elif self.model.startswith("gpt") or self.model.startswith("gemini"):
             if self.model.startswith("gpt"):
@@ -735,9 +755,13 @@ class PromptAgent:
                 "model": self.model,
                 "max_tokens": max_tokens,
                 "messages": claude_messages,
-                "temperature": temperature,
-                "top_p": top_p
             }
+            # Newer Claude models (e.g. claude-opus-4-8) reject `temperature`
+            # ("temperature is deprecated for this model"); only send sampling
+            # params for models that still accept them.
+            if not self.model.startswith("claude-opus-4-8"):
+                payload["temperature"] = temperature
+                payload["top_p"] = top_p
 
             response = requests.post(
                 "https://api.anthropic.com/v1/messages",

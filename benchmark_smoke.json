@@ -1,0 +1,52 @@
+[
+  {
+    "task_id": "win_hr__l1_001",
+    "instruction": "Open the employee data file on the desktop, sort the employees by department in ascending order, and save the file.",
+    "instruction_cn": "打开桌面上的员工数据.xlsx文件，按部门名称升序排序，并保存文件。",
+    "task_category": "L1",
+    "persona": "HR Specialist",
+    "involved_apps": [
+      "Excel"
+    ],
+    "pre_conditions": [
+      "员工数据.xlsx 文件存在于桌面路径且可访问",
+      "Excel 应用已安装并可正常启动",
+      "操作系统桌面环境已加载并可访问"
+    ],
+    "environment_setup": {
+      "files_to_create": [
+        {
+          "filename": "员工数据.xlsx",
+          "file_path": "C:\\Users\\User\\Desktop\\",
+          "file_type": "xlsx",
+          "content_generation_prompt": "生成包含15行员工数据的表格，列包括：姓名（中文名）、部门（如人力资源部、技术部、市场部等）、工号（6位数字）"
+        }
+      ],
+      "urls_to_mock": [],
+      "downloadable_resources": []
+    },
+    "evaluation_metrics": {
+      "success_criterion": "员工数据.xlsx 文件已按“部门”列升序排序并成功保存",
+      "intermediate_checks": [
+        "员工数据.xlsx 文件已在 Excel 中打开且处于活动窗口",
+        "数据区域已被正确识别，并已应用按“部门”列的升序排序",
+        "文件已保存"
+      ],
+      "expected_final_state": "桌面上的“员工数据.xlsx”文件存在，其内容按“部门”列以升序排列，且文件已保存，无未保存的更改。"
+    },
+    "validity_info": {
+      "is_valid": true,
+      "validity_note": null,
+      "checked_urls": [],
+      "checked_files": []
+    },
+    "is_duplicate": false,
+    "duplicate_of": null,
+    "similarity_score": null,
+    "created_at": "2025-12-20T14:18:03.499829",
+    "refined_at": "2025-12-20T16:43:52.864731",
+    "reviewed_at": "2025-12-20T17:30:03.210376",
+    "review_status": "approved",
+    "reviewer_notes": null
+  }
+]
