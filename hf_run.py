@@ -334,17 +334,37 @@ def run_one_task(task_dir: str, agent, env: DesktopEnv, task: dict, agent_type: 
     if agent_type == "uipath" and hasattr(agent, 'set_max_steps'):
         agent.set_max_steps(max_steps)
 
+    # Watchdog: force-advance a stuck agent (same action looped, or repeated
+    # empty/failed predicts) instead of burning the whole step budget.
+    _wd_repeat = int(os.environ.get("WATCHDOG_REPEAT", "5"))
+    _wd_empty = int(os.environ.get("WATCHDOG_EMPTY", "4"))
+    _wd_last_sig, _wd_repeat_streak, _wd_empty_streak = None, 0, 0
+
     while not done and step_index < max_steps:
         actions: list[str]
         predict_time = datetime.datetime.now()
         response, actions = agent.predict(task["instruction"], obs)
         predict_time = datetime.datetime.now() - predict_time
         pprint(f"Step {step_index} - Response: {response}")
-        
+
         # Handle different action formats
         if isinstance(actions, str):
             actions = [actions]
-        
+
+        # Watchdog: detect a stuck loop and break to the next task early.
+        _wd_sig = json.dumps([str(a) for a in actions], sort_keys=True)
+        _wd_empty_streak = _wd_empty_streak + 1 if (not response or not actions) else 0
+        if _wd_sig == _wd_last_sig:
+            _wd_repeat_streak += 1
+        else:
+            _wd_repeat_streak, _wd_last_sig = 0, _wd_sig
+        if _wd_repeat_streak + 1 >= _wd_repeat or _wd_empty_streak >= _wd_empty:
+            reason = (f"identical action repeated {_wd_repeat_streak + 1}x"
+                      if _wd_repeat_streak + 1 >= _wd_repeat
+                      else f"{_wd_empty_streak} empty/failed responses in a row")
+            pprint(f"Step {step_index} - WATCHDOG: {reason}; terminating task early")
+            break
+
         all_actions.extend(actions)
         for action in actions:
             action_time = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
